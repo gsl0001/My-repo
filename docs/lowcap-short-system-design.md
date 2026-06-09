@@ -95,12 +95,17 @@ position sizing are first-class concerns.
 - **Kill switch:** global flatten + halt-new-orders control.
 
 ## 6. Open questions / next steps
-- [ ] Validate TradeZero locate request/confirm flow in paper/onboarding.
+- [ ] Validate TradeZero locate request/confirm flow in paper/onboarding (flow drafted in §10).
 - [ ] Confirm Polygon plan tier needed for full-universe real-time.
-- [ ] Define exact universe parameters (cap band, price floor, min ADV).
-- [ ] Define squeeze-guard thresholds.
+- [x] Define starting universe parameters — drafted in §8 (tune via backtest).
+- [x] Define starting squeeze-guard thresholds — drafted in §9 (tune via backtest).
+- [x] Draft TradeZero locate-orchestration flow — §10.
 - [ ] Build backtester with realistic slippage + borrow-cost modeling.
 - [ ] Decide intraday-only vs. allow overnight for dilution grinds.
+
+> All numeric thresholds in §8–§9 are **starting hypotheses to be tuned against a
+> backtest**, not validated parameters. They exist to make the system concrete and
+> testable, not to be traded live as-is.
 
 ## 7. Data sources reference
 | Source | Type | Cost | Notes |
@@ -111,3 +116,102 @@ position sizing are first-class concerns.
 | SEC EDGAR full-text API | Filings/catalysts | Free | Dilution detection |
 | StockTwits API (optional) | Social/promo | Free tier | Pump detection |
 | Ortex (optional) | Short interest/borrow | Paid | Days-to-cover, SI estimates |
+
+---
+
+## 8. Universe parameters (starting defaults)
+
+> All values are tuning starting points. Each should be a config knob, not a hardcoded
+> constant.
+
+| Parameter | Starting value | Rationale |
+|---|---|---|
+| **Market cap band** | $10M – $500M | Micro/small-cap inefficiency; below $10M is too manipulable/illiquid |
+| **Price floor** | $1.00 | Sub-$1 = delisting halts, no borrow, worst manipulation; avoid |
+| **Price ceiling** | $25.00 | Keeps focus on low-priced names where pump dynamics dominate |
+| **Min average dollar volume (20d)** | ≥ $3M/day | Liquidity gate so our own fills don't dominate the tape |
+| **Min ADV (shares, 20d)** | ≥ 500k | Secondary liquidity check for share-count sizing |
+| **Float** | Track; flag low float (< 20M sh) | Low float = squeeze-prone → smaller size, not auto-exclude |
+| **Borrowable (IBKR file)** | shares available > 0 | Pre-filter; TradeZero confirms the real locate |
+| **Max acceptable borrow fee** | ≤ 100% annualized (soft), hard cap 300% | Above this = crowded, squeeze-risky, and fees eat the edge |
+| **Listing** | NASDAQ / NYSE / AMEX only | Exclude OTC/pinks (no clean borrow, no reliable data) |
+
+**Intraday trigger gates (on top of the static universe):**
+- Relative volume (RVOL vs 20d) ≥ 3× to qualify as "in play."
+- Gap or intraday move present (the pump-fade needs a spike to fade).
+
+## 9. Squeeze-guard thresholds (starting defaults)
+
+The squeeze guard protects against the asymmetric blow-up. It runs both at **entry**
+(size down / abort) and **post-entry** (reduce / exit).
+
+| Signal | Caution (reduce size) | Abort / no-entry | Force-exit (in position) |
+|---|---|---|---|
+| Intraday % gain vs prior close | > 50% | > 100% and still accelerating | — |
+| RVOL (vs 20d) | > 5× | > 10× | spikes to > 10× against us |
+| Borrow fee (annualized) | > 100% | > 300% | recall / locate lost |
+| Float | < 20M sh | < 5M sh | — |
+| Adverse move from entry | — | — | ≥ 15–20% against position |
+| Consecutive green/up-thrust | — | parabolic w/ no pullback | new highs on accelerating vol |
+| LULD halt | halt-up = pause adds | halt-up before entry = skip | halt-up against us = exit on resume |
+
+**Account-level circuit breakers (hard stops, halt all new orders):**
+- Per-position max loss: 15–20% adverse (configurable).
+- Daily account drawdown limit: e.g. −3% to −5% → flatten + stop for the day.
+- Max concurrent positions / max gross short exposure caps.
+- **Global kill switch:** one control that flattens everything and blocks new orders.
+
+> Squeeze logic should err toward *abort/reduce*. In low caps, the cost of skipping a good
+> trade is far lower than the cost of one uncapped-loss squeeze.
+
+## 10. TradeZero locate-orchestration flow
+
+This is the riskiest part to automate — locates are a hard Reg SHO gate and TradeZero
+locate fees are a real, often non-refundable cost. Flow:
+
+```
+1. PRE-MARKET — build candidate list
+   universe filter (§8) + IBKR borrow file ⇒ symbols worth checking
+
+2. LOCATE QUOTE  (per candidate)
+   query TradeZero locate availability:
+     → shares available?
+     → cost per share to locate?
+   no availability ⇒ drop symbol
+
+3. LOCATE COST GATE
+   accept only if  locate_cost  <  X% of expected edge
+     (e.g. expected fade move × size × win-prob)
+   too expensive ⇒ drop symbol
+
+4. LOCATE ACCEPT / RESERVE
+   confirm locate via API ⇒ shares reserved (fee usually incurred here)
+   record located_shares per symbol
+
+5. SIGNAL TRIGGER ⇒ SHORT ORDER
+   on intraday signal, send short order ≤ located_shares
+   use marketable limit + attached programmatic stop
+
+6. POSITION MANAGEMENT
+   squeeze guard (§9) runs continuously
+   exit on: target reversion % | time-stop (flat by close) |
+            thesis invalidation | stop hit | borrow recall
+
+7. END OF DAY
+   ensure flat (intraday mandate)
+   release/reconcile unused locates; log locate fees as cost
+```
+
+**Edge cases the order layer must handle:**
+- **Partial locate** — fewer shares granted than requested → cap size accordingly.
+- **Locate reject / timeout** — retry budget, then drop symbol cleanly.
+- **Non-refundable locate fee** — model unused locates as sunk cost; tune step 3 so we
+  don't over-reserve.
+- **Borrow recall mid-trade** — detect and force-exit gracefully.
+- **API/auth failure** — fail closed (no order without a confirmed locate). Never short
+  without a confirmed locate (Reg SHO).
+- **Rate limits** — batch/queue locate quotes within TradeZero API limits.
+
+> ⚠️ **To verify against TradeZero API docs:** exact locate endpoint names, whether locate
+> fees are refundable on unused holds, intraday (not just pre-market) locate support, and
+> rate limits. Confirm all of this in a paper/onboarding account before any live wiring.

@@ -1,0 +1,52 @@
+# Starting defaults from docs/lowcap-short-system-design.md sections 8-9.
+# Every value is a tuning hypothesis to validate in backtest, not a live parameter.
+
+universe:
+  min_market_cap: 10000000        # $10M
+  max_market_cap: 500000000       # $500M
+  price_floor: 1.00
+  price_ceiling: 25.00
+  min_adv_dollar_20d: 3000000     # >= $3M/day
+  min_adv_shares_20d: 500000
+  low_float_flag_shares: 20000000 # flag low float, do not auto-exclude
+  soft_max_borrow_fee_pct: 100
+  hard_max_borrow_fee_pct: 300
+  allowed_exchanges: [NASDAQ, NYSE, AMEX]
+  min_trigger_rvol: 3.0
+  min_trigger_move_pct: 10.0
+
+squeeze:
+  caution_gain_pct: 50
+  caution_rvol: 5
+  caution_borrow_fee_pct: 100
+  caution_float_shares: 20000000
+  abort_gain_pct: 100
+  abort_rvol: 10
+  abort_borrow_fee_pct: 300
+  abort_float_shares: 5000000
+  force_exit_adverse_pct: 15
+  force_exit_rvol: 10
+  caution_size_factor: 0.5
+
+risk:
+  max_pct_of_adv: 1.0
+  max_position_dollars: 25000
+  target_risk_dollars: 1000
+  stop_distance_pct: 15
+  target_reversion_pct: 15
+  per_position_max_loss_pct: 20
+  daily_drawdown_limit_pct: 4
+  max_concurrent_positions: 5
+  max_gross_short_exposure: 100000
+
+locate:
+  max_locate_cost_fraction_of_edge: 0.20
+  locate_retry_budget: 2
+  locate_timeout_seconds: 10
+  expected_win_prob: 0.55
+  expected_fade_pct: 10
+
+session:
+  market_open: "09:30"
+  market_close: "16:00"
+  flatten_by: "15:50"

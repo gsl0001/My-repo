@@ -21,7 +21,7 @@ position sizing are first-class concerns.
 
 | Layer | Choice | Role |
 |---|---|---|
-| **Broker / execution** | **TradeZero** | Order routing, short locates (REST/WebSocket API) |
+| **Broker / execution** | **TradeZero Canada** (operator is CA-resident; International entity does not accept Canadians) | Order routing, short locates (REST/WebSocket API) |
 | **Market data** | **Polygon.io API** | Real-time + historical full-universe data, scanning, backtest |
 | **Borrow / short-availability data** | **IBKR** (short-availability files) | Daily shortable-shares + fee-rate data to drive screener |
 | **Catalyst data** | **SEC EDGAR full-text API** (free) | Dilution-filing detection (S-1, S-3, 424B5, 8-K) |
@@ -89,8 +89,16 @@ position sizing are first-class concerns.
 - Exit on target reversion %, thesis invalidation, or borrow recall.
 
 ## 5. Compliance / operational constraints
-- **PDT rule:** automated intraday trading requires ≥ $25k equity (US). Realistic minimum
-  is higher (~$30–50k) so a drawdown doesn't trip the PDT floor and freeze the account.
+- **Jurisdiction / entity (operator is a Canadian resident):** Canadian residents are
+  **not eligible for TradeZero International** (Bahamas) — they onboard through
+  **TradeZero Canada Securities ULC** (CIRO dealer-member, CIPF). All API/locate
+  assumptions in this doc must be confirmed against the Canada entity specifically.
+- **PDT rule: does not apply.** FINRA's $25k pattern-day-trader rule binds US
+  (TradeZero America) accounts only. Still hold a healthy equity buffer (~$30k+) —
+  short selling thin names with a small account dies to margin calls, not rules.
+- **Canadian specifics to confirm:** CIRO day-trading margin treatment for short
+  positions, USD account funding/conversion costs, and tax treatment of high-frequency
+  trading gains (likely business income, not capital gains — plan for it).
 - **Reg SHO:** locate required per short order — enforce in order layer, not as afterthought.
 - **SSR (Rule 201):** when a stock drops ≥ 10% from prior close, short sales are restricted
   to prices **above the national best bid** for the rest of that day and the next. Pumps
@@ -108,6 +116,10 @@ position sizing are first-class concerns.
   dedicated [Locates API](https://developer.tradezero.com/docs/documentation/locates)
   (quote → accept → inventory → **sell-back credit for unused locates**), default rate
   limit 200 req/min, no extra API fee. Enable via Client Portal + API Trading Agreement.
+- [ ] **Confirm Developer API is enabled for TradeZero Canada accounts.** Docs say
+  "available to eligible TradeZero account holders" without an entity breakdown — ask
+  TradeZero support directly before opening the account. **This is a hard blocker:** if
+  the Canada entity can't enable the API, the broker choice must be revisited.
 - [ ] Exercise the locate request/confirm/credit-back flow end-to-end in a test account
   (flow drafted in §10) and record actual latencies + fee behavior.
 - [ ] Confirm Polygon plan tier needed for full-universe real-time.
@@ -286,8 +298,10 @@ Each phase has an explicit gate. **Failing a gate means stop or go back — not 
 with caution."**
 
 ### Phase 0 — Infrastructure & data (≈ weeks 1–4)
+First action (before building anything): **confirm with TradeZero support that a
+TradeZero Canada account can enable the Developer API** (§6 blocker).
 Build: borrow/locate recorder (§11.2), Polygon ingestion, EDGAR filing watcher,
-TradeZero API auth + locate flow exercised in a test account.
+TradeZero API auth + locate flow exercised in a paper-environment account.
 > **Gate:** recorder running unattended ≥ 2 weeks with no data gaps; locate
 > quote→accept→credit-back round-trip demonstrated via API.
 
@@ -307,7 +321,8 @@ fills against the live tape — with zero capital at risk. Log everything.
 
 ### Phase 3 — Small live (≈ months 6–9)
 Real money at **minimum viable size** (1 position at a time, smallest sensible size),
-account well above the $25k PDT floor. Purpose: measure real fills, real locate fees,
+with a comfortable equity buffer (no PDT floor for a Canada account, but margin on
+volatile shorts demands headroom). Purpose: measure real fills, real locate fees,
 real recall behavior — not to make money.
 > **Gate:** ≥ 100 live trades; realized slippage + locate costs within the bracket
 > assumed in Phase 1; no risk-limit breaches; live edge statistically consistent with

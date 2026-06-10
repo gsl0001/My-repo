@@ -25,7 +25,9 @@ historical locate data cannot be bought later, so backtest data collection start
 when the recorder is live.
 
 ## Stack
-- **Broker / execution:** TradeZero (REST/WebSocket API)
+- **Broker / execution:** TradeZero Canada (REST/WebSocket API) — operator is a Canadian
+  resident; TradeZero International does not accept Canadians. API eligibility for the
+  Canada entity is an open blocker (design §6).
 - **Market data:** Polygon.io API
 - **Borrow data:** IBKR short-availability files
 - **Catalysts:** SEC EDGAR full-text API

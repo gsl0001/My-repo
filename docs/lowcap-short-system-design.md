@@ -21,7 +21,7 @@ position sizing are first-class concerns.
 
 | Layer | Choice | Role |
 |---|---|---|
-| **Broker / execution** | **TradeZero** | Order routing, short locates (REST/WebSocket API) |
+| **Broker / execution** | **TradeZero Canada** (operator is CA-resident; International entity does not accept Canadians) | Order routing, short locates (REST/WebSocket API) |
 | **Market data** | **Polygon.io API** | Real-time + historical full-universe data, scanning, backtest |
 | **Borrow / short-availability data** | **IBKR** (short-availability files) | Daily shortable-shares + fee-rate data to drive screener |
 | **Catalyst data** | **SEC EDGAR full-text API** (free) | Dilution-filing detection (S-1, S-3, 424B5, 8-K) |
@@ -89,19 +89,48 @@ position sizing are first-class concerns.
 - Exit on target reversion %, thesis invalidation, or borrow recall.
 
 ## 5. Compliance / operational constraints
-- **PDT rule:** automated intraday trading requires ≥ $25k equity (US).
+- **Jurisdiction / entity (operator is a Canadian resident):** Canadian residents are
+  **not eligible for TradeZero International** (Bahamas) — they onboard through
+  **TradeZero Canada Securities ULC** (CIRO dealer-member, CIPF). All API/locate
+  assumptions in this doc must be confirmed against the Canada entity specifically.
+- **PDT rule: does not apply.** FINRA's $25k pattern-day-trader rule binds US
+  (TradeZero America) accounts only. Still hold a healthy equity buffer (~$30k+) —
+  short selling thin names with a small account dies to margin calls, not rules.
+- **Canadian specifics to confirm:** CIRO day-trading margin treatment for short
+  positions, USD account funding/conversion costs, and tax treatment of high-frequency
+  trading gains (likely business income, not capital gains — plan for it).
 - **Reg SHO:** locate required per short order — enforce in order layer, not as afterthought.
+- **SSR (Rule 201):** when a stock drops ≥ 10% from prior close, short sales are restricted
+  to prices **above the national best bid** for the rest of that day and the next. Pumps
+  that crack often trigger SSR exactly when we want to add — the order layer must detect
+  SSR state and switch to passive (above-bid) order types, and the backtest must model it
+  or fills will be fantasy.
+- **LULD halts:** low caps halt constantly on pumps. Track halt state; never assume a
+  resting stop fills through a halt (it gaps).
 - **Borrow recall:** handle forced buy-ins gracefully.
 - **Kill switch:** global flatten + halt-new-orders control.
 
 ## 6. Open questions / next steps
-- [ ] Validate TradeZero locate request/confirm flow in paper/onboarding (flow drafted in §10).
+- [x] Confirm TradeZero exposes locates programmatically — **confirmed**: official
+  Developer API at [developer.tradezero.com](https://developer.tradezero.com) includes a
+  dedicated [Locates API](https://developer.tradezero.com/docs/documentation/locates)
+  (quote → accept → inventory → **sell-back credit for unused locates**), default rate
+  limit 200 req/min, no extra API fee. Enable via Client Portal + API Trading Agreement.
+- [ ] **Confirm Developer API is enabled for TradeZero Canada accounts.** Docs say
+  "available to eligible TradeZero account holders" without an entity breakdown — ask
+  TradeZero support directly before opening the account. **This is a hard blocker:** if
+  the Canada entity can't enable the API, the broker choice must be revisited.
+- [ ] Exercise the locate request/confirm/credit-back flow end-to-end in a test account
+  (flow drafted in §10) and record actual latencies + fee behavior.
 - [ ] Confirm Polygon plan tier needed for full-universe real-time.
 - [x] Define starting universe parameters — drafted in §8 (tune via backtest).
 - [x] Define starting squeeze-guard thresholds — drafted in §9 (tune via backtest).
 - [x] Draft TradeZero locate-orchestration flow — §10.
-- [ ] Build backtester with realistic slippage + borrow-cost modeling.
+- [ ] **Start the borrow/locate data recorder (§11.2) — the clock on backtest data only
+  starts when this is running.** Highest-priority build item.
+- [ ] Build backtester per realism requirements in §11.
 - [ ] Decide intraday-only vs. allow overnight for dilution grinds.
+- [ ] Execute the phased roadmap in §12 — no live capital before its gates pass.
 
 > All numeric thresholds in §8–§9 are **starting hypotheses to be tuned against a
 > backtest**, not validated parameters. They exist to make the system concrete and
@@ -212,6 +241,105 @@ locate fees are a real, often non-refundable cost. Flow:
   without a confirmed locate (Reg SHO).
 - **Rate limits** — batch/queue locate quotes within TradeZero API limits.
 
-> ⚠️ **To verify against TradeZero API docs:** exact locate endpoint names, whether locate
-> fees are refundable on unused holds, intraday (not just pre-market) locate support, and
-> rate limits. Confirm all of this in a paper/onboarding account before any live wiring.
+> ✅ **Verified against TradeZero docs (2026):** the Developer API exposes the full locate
+> lifecycle — request, status, accept quote, and **sell (credit) unused locates back** —
+> with a default rate limit of **200 authenticated requests/min** and no extra API fee.
+> Still to confirm in a test account: actual quote latency, intraday (not just pre-market)
+> locate inventory depth, and the real economics of the credit-back (haircut vs. full
+> refund). Confirm before any live wiring.
+
+---
+
+## 11. Backtest realism requirements
+
+A naive backtest of this strategy will look spectacular and be unreproducible live. These
+are the non-negotiables before any backtest number is trusted:
+
+### 11.1 Survivorship bias
+Most pump-and-dump names get delisted. Backtesting on today's universe silently drops the
+best historical shorts *and* the worst squeezes. Use a point-in-time universe including
+**delisted tickers** (Polygon retains delisted symbols — verify coverage depth for
+micro-caps before relying on it).
+
+### 11.2 Borrow/locate history does not exist retroactively ⚠️
+Nobody sells historical TradeZero locate fees or intraday availability. This is the
+binding constraint on the whole plan:
+
+- **Build a recorder first.** Daily snapshot of IBKR short-availability files + periodic
+  TradeZero locate quotes for the scanned universe, archived from day one. Every day the
+  recorder isn't running is a day of backtest data lost forever.
+- Until ~3–6 months of recorded data exist, locate costs in the backtest are *assumptions*.
+  Bracket them: run every backtest at 1×, 2×, and 4× assumed locate cost and see where the
+  edge dies.
+- Ortex or similar can partially proxy historical borrow fees for sensitivity checks, not
+  for ground truth on locate pricing.
+
+### 11.3 Fill realism
+- **No mid-or-better fills.** Assume crossing the spread + slippage scaled to
+  (order size / interval volume). Thin tape: our own order moves the price.
+- **Model SSR (Rule 201):** when triggered, short entries become above-bid passive orders —
+  lower fill probability, worse timing. Ignoring SSR overstates pump-fade entries on the
+  exact days that matter most.
+- **Model LULD halts:** positions through a halt re-open at the gap price, not the stop
+  price. Stops do not protect through halts.
+- **Locate quantity caps size:** simulated position ≤ simulated located shares, not
+  ≤ desired size.
+
+### 11.4 Validation discipline
+- Split data: tune §8/§9 thresholds in-sample, report out-of-sample only.
+- Walk-forward, not one global fit; pump regimes shift (2021 ≠ 2024 ≠ 2026).
+- Report **per-trade distribution**, not just aggregate PnL — the strategy lives or dies
+  on the left tail (the one squeeze that eats a month).
+- Minimum sample before trusting anything: a few hundred out-of-sample trades.
+
+## 12. Phased roadmap with go/no-go gates
+
+Each phase has an explicit gate. **Failing a gate means stop or go back — not "proceed
+with caution."**
+
+### Phase 0 — Infrastructure & data (≈ weeks 1–4)
+First action (before building anything): **confirm with TradeZero support that a
+TradeZero Canada account can enable the Developer API** (§6 blocker).
+Build: borrow/locate recorder (§11.2), Polygon ingestion, EDGAR filing watcher,
+TradeZero API auth + locate flow exercised in a paper-environment account.
+> **Gate:** recorder running unattended ≥ 2 weeks with no data gaps; locate
+> quote→accept→credit-back round-trip demonstrated via API.
+
+### Phase 1 — Research & backtest (≈ months 2–4, overlaps Phase 0 recording)
+Build: backtester meeting all §11 requirements; tune §8/§9 in-sample; out-of-sample +
+locate-cost-bracketed results.
+> **Gate:** out-of-sample edge survives 2× assumed locate costs and pessimistic fills;
+> per-trade left tail acceptable under §9 circuit breakers; a few hundred OOS trades.
+> *If the edge only exists at optimistic costs — stop here. That is a result.*
+
+### Phase 2 — Shadow trading (≈ months 4–6)
+Run the full live loop — signals, real locate quotes (quote, don't accept), simulated
+fills against the live tape — with zero capital at risk. Log everything.
+> **Gate:** ≥ 6 weeks shadow PnL within tolerance of backtest expectation for the same
+> period (tracking error explained); zero compliance violations (every simulated short
+> had a real available locate; SSR respected); kill switch tested.
+
+### Phase 3 — Small live (≈ months 6–9)
+Real money at **minimum viable size** (1 position at a time, smallest sensible size),
+with a comfortable equity buffer (no PDT floor for a Canada account, but margin on
+volatile shorts demands headroom). Purpose: measure real fills, real locate fees,
+real recall behavior — not to make money.
+> **Gate:** ≥ 100 live trades; realized slippage + locate costs within the bracket
+> assumed in Phase 1; no risk-limit breaches; live edge statistically consistent with
+> shadow/backtest.
+
+### Phase 4 — Scale gradually
+Increase size only while live tracking holds. Permanent practices: weekly live-vs-model
+reconciliation, edge-decay monitoring (this edge is crowded and erodes), and an automatic
+de-risk rule (e.g. halve size after any week breaching drawdown limits).
+
+### Running cost reality check (order of magnitude, verify current pricing)
+| Item | Est. monthly |
+|---|---|
+| Polygon (real-time full-universe tier) | ~$200 |
+| TradeZero API | $0 (account required) |
+| Locate fees (live phases — the dominant cost) | highly variable; often $10s–$100s/day when active |
+| Infra (VPS/cloud, logging, alerting) | ~$20–100 |
+
+Locate fees scale with activity and are the most likely silent edge-killer — which is why
+the §10 cost gate and §11.2 bracketing exist.

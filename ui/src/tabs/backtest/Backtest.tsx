@@ -39,8 +39,8 @@ export function Backtest() {
       <Panel label="TRADES">
         <table className="w-full border-collapse font-mono text-[9.5px]">
           <thead><tr className="text-muted2 text-right">
-            {["DATE", "SYM", "ENTRY", "EXIT", "P&L", "RET%", "BORROW", "HOLD", "EXIT"].map((h) => (
-              <th key={h} className={`font-medium px-3 py-1 ${h === "DATE" || h === "SYM" ? "text-left" : ""}`}>{h}</th>
+            {["DATE", "SYM", "ENTRY", "EXIT", "P&L", "RET%", "BORROW", "HOLD", "EXIT"].map((h, i) => (
+              <th key={i} className={`font-medium px-3 py-1 ${h === "DATE" || h === "SYM" ? "text-left" : ""}`}>{h}</th>
             ))}
           </tr></thead>
           <tbody className="text-right">

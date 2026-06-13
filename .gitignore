@@ -7,6 +7,9 @@ dist/
 *.local
 .vite/
 
+# Secrets — never commit real credentials
+.env
+
 # Python (engine)
 __pycache__/
 *.py[cod]

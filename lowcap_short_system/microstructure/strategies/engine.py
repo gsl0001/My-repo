@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from lowcap_short_system.microstructure.config import MicroConfig
 from lowcap_short_system.microstructure.events import BookState, TradePrint, LevelChange
 from lowcap_short_system.microstructure import features as F
-from lowcap_short_system.microstructure.strategies.base import Features, EvalContext, Signal
+from lowcap_short_system.microstructure.strategies.base import Features, EvalContext, Signal, Strategy
 from lowcap_short_system.microstructure.strategies.imbalance import ImbalanceStrategy
 from lowcap_short_system.microstructure.strategies.absorption import AbsorptionStrategy
 from lowcap_short_system.microstructure.strategies.tape import TapeStrategy
@@ -29,7 +29,7 @@ def compute_features(book: BookState, prints: list[TradePrint],
 class StrategyEngine:
     def __init__(self, cfg: MicroConfig) -> None:
         self.cfg = cfg
-        self.strategies = [ImbalanceStrategy(), AbsorptionStrategy(), TapeStrategy()]
+        self.strategies: list[Strategy] = [ImbalanceStrategy(), AbsorptionStrategy(), TapeStrategy()]
 
     def evaluate(self, book: BookState, prints: list[TradePrint],
                  changes: list[LevelChange], ctx: EvalContext) -> ConfirmedSignal | None:

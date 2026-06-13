@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 from lowcap_short_system.risk.sizing import SizeInputs, size_short
 from lowcap_short_system.locate.provider import LocateProvider
-from lowcap_short_system.execution.paper import PaperBroker, PaperPosition
+from lowcap_short_system.execution.paper import PaperPosition
+from lowcap_short_system.execution.router import OrderRouter
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,7 @@ def submit_short(
     decision: ShortDecision,
     risk: RiskParams,
     locate_provider: LocateProvider,
-    broker: PaperBroker,
+    broker: OrderRouter,
     *,
     halted: bool = False,
 ) -> SubmitResult:

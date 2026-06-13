@@ -7,5 +7,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
+    // give jsdom a real origin so localStorage works (config persistence)
+    environmentOptions: { jsdom: { url: "http://localhost/" } },
   },
 });

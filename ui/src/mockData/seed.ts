@@ -85,8 +85,10 @@ export function makeSeedState(seed: number): AppState {
       drawdownPct: 0,
       positionsCount: positions.length,
       halted: false,
+      paused: false,
     },
     config: { universe: defaultUniverse, squeeze: defaultSqueeze, breakers: defaultBreakers },
     eventsPerMin: 14,
+    clockMs: t0,
   };
 }

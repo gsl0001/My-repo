@@ -80,7 +80,8 @@ export interface Account {
   grossLimit: number;
   drawdownPct: number;      // <= 0, peak-to-now
   positionsCount: number;
-  halted: boolean;
+  halted: boolean;          // kill switch engaged (flat + no new orders)
+  paused: boolean;          // simulation clock frozen (state intact)
 }
 
 export interface SqueezeThresholds {
@@ -128,4 +129,5 @@ export interface AppState {
   account: Account;
   config: Config;
   eventsPerMin: number;
+  clockMs: number;          // simulated session clock (epoch ms)
 }

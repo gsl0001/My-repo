@@ -1,3 +1,5 @@
+import type { L2Sim, L2Features, L2Signal } from "./l2";
+
 export type GuardState = "ok" | "caution" | "exit";
 
 export interface Position {
@@ -130,4 +132,6 @@ export interface AppState {
   config: Config;
   eventsPerMin: number;
   clockMs: number;          // simulated session clock (epoch ms)
+  l2: L2Sim;                // depth/tape for the focused in-play name
+  l2Eval: { features: L2Features; signal: L2Signal };
 }

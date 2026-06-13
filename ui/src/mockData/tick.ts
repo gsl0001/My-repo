@@ -6,6 +6,7 @@ import { advanceOrder } from "./orders";
 import { makeLogEvent, randomLogLine, makeCandidate, symbolPool } from "./generators";
 import { recomputeAccount } from "./account";
 import { canEnter, shortQtyFor, makeShortOrder } from "./entry";
+import { initL2, stepL2, evaluateL2 } from "./l2";
 
 const CAP = 200;
 const DT = 1;
@@ -173,6 +174,17 @@ export function tickStep(state: AppState, tickSeed: number): AppState {
     events.push(randomLogLine(tickSeed + 1, now));
   }
 
+  // 6b. step the L2 microstructure sim for the focused in-play name
+  const focusSym = candidates[0]?.symbol ?? positions[0]?.symbol ?? state.l2.symbol;
+  const focusRef =
+    candidates.find((c) => c.symbol === focusSym)?.last ??
+    positions.find((p) => p.symbol === focusSym)?.last ??
+    state.l2.ref;
+  const l2 = state.l2.symbol === focusSym ? stepL2(state.l2, tickSeed) : initL2(focusSym, focusRef);
+  const l2Eval = evaluateL2(
+    l2.book, l2.tape, l2.now, positions.some((p) => p.symbol === focusSym), l2.spoof
+  );
+
   // 7. recompute account from new positions + realized
   const account = recomputeAccount({ ...state.account, realizedPnl }, positions, state.account.startEquity);
 
@@ -190,5 +202,7 @@ export function tickStep(state: AppState, tickSeed: number): AppState {
     account,
     log,
     eventsPerMin,
+    l2,
+    l2Eval,
   };
 }

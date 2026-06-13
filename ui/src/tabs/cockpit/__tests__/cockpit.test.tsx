@@ -10,6 +10,7 @@ describe("Cockpit", () => {
     expect(screen.getByText(/ACTIVE ORDERS/)).toBeInTheDocument();
     expect(screen.getByText(/LIVE SCANNER/)).toBeInTheDocument();
     expect(screen.getByText("LIVE LOG")).toBeInTheDocument();
+    expect(screen.getByText(/^L2 ·/)).toBeInTheDocument(); // Level 2 depth panel
     expect(screen.getAllByText("TICK").length).toBeGreaterThan(0);
   });
 });

@@ -2,6 +2,7 @@ import { Panel } from "../../components/Panel";
 import { StatRow } from "../../components/StatRow";
 import { ProgressBar } from "../../components/ProgressBar";
 import { Sparkline } from "../../components/Sparkline";
+import { L2Panel } from "./L2Panel";
 import { useStore } from "../../mockData/store";
 
 const money = (n: number) => `${n < 0 ? "-" : "+"}$${Math.abs(Math.round(n)).toLocaleString()}`;
@@ -13,6 +14,7 @@ export function RightRail() {
 
   return (
     <div className="flex flex-col gap-[10px]">
+      <L2Panel />
       <Panel label="DAY P&L">
         <div className="p-[10px]">
           <div className={`font-mono text-[22px] font-bold ${a.dayPnl >= 0 ? "text-up" : "text-down"}`}>{money(a.dayPnl)}</div>

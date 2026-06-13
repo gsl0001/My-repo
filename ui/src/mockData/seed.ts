@@ -3,6 +3,7 @@ import { shortUnrealized, shortPctFromEntry } from "./pnl";
 import { evaluateGuard, defaultSqueeze } from "./guard";
 import { defaultUniverse, defaultBreakers } from "./config-defaults";
 import { makeCandidate, makeLogEvent, resetLogCounter, symbolPool } from "./generators";
+import { initL2, evaluateL2 } from "./l2";
 
 interface SeedPos {
   symbol: string; shortQty: number; avgPrice: number; last: number;
@@ -65,6 +66,12 @@ export function makeSeedState(seed: number): AppState {
   const grossShort = positions.reduce((s, p) => s + p.shortQty * p.last, 0);
   const startEquity = 128400 - dayPnl;
 
+  const focus = candidates[0];
+  const l2 = initL2(focus.symbol, focus.last);
+  const l2Eval = evaluateL2(
+    l2.book, l2.tape, l2.now, positions.some((p) => p.symbol === focus.symbol), l2.spoof
+  );
+
   return {
     positions,
     orders: [
@@ -90,5 +97,7 @@ export function makeSeedState(seed: number): AppState {
     config: { universe: defaultUniverse, squeeze: defaultSqueeze, breakers: defaultBreakers },
     eventsPerMin: 14,
     clockMs: t0,
+    l2,
+    l2Eval,
   };
 }

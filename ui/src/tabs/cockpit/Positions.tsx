@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Panel } from "../../components/Panel";
 import { DataTable, type Column } from "../../components/DataTable";
+import { ConfirmModal } from "../../components/ConfirmModal";
 import { useStore } from "../../mockData/store";
 import type { Position } from "../../mockData/types";
 
@@ -10,6 +12,8 @@ const money = (n: number) => `${n < 0 ? "-" : "+"}$${Math.abs(Math.round(n)).toL
 
 export function Positions() {
   const { state, dispatch } = useStore();
+  const [target, setTarget] = useState<Position | null>(null);
+
   const cols: Column<Position>[] = [
     { key: "sym", header: "SYM", render: (p) => <span className="text-strong">{p.symbol}</span> },
     { key: "qty", header: "SHORT", align: "right", render: (p) => p.shortQty.toLocaleString() },
@@ -21,10 +25,19 @@ export function Positions() {
     { key: "fee", header: "FEE", align: "right", render: (p) => `${p.borrowFeePct}%` },
     { key: "guard", header: "GUARD", align: "right", render: (p) => <span className={guardColor(p.guardState)}>{guardLabel(p.guardState)}</span> },
   ];
+
   return (
-    <Panel label={`OPEN POSITIONS · ${state.positions.length}`}>
-      <DataTable columns={cols} rows={state.positions} getKey={(p) => p.id}
-        onRowClick={(p) => dispatch({ type: "COVER_POSITION", symbol: p.symbol })} />
+    <Panel label={`OPEN POSITIONS · ${state.positions.length}`} right={<span className="text-[9px] text-muted2">click a row to cover</span>}>
+      <DataTable columns={cols} rows={state.positions} getKey={(p) => p.id} onRowClick={setTarget} />
+      {target && (
+        <ConfirmModal
+          title={`Cover ${target.symbol}?`}
+          body={<>Buy-to-cover {target.shortQty.toLocaleString()} shares @ ~{target.last.toFixed(2)} and book {money(target.unrealizedPnl)}. Mock only.</>}
+          confirmLabel="Cover"
+          onConfirm={() => { dispatch({ type: "COVER_POSITION", symbol: target.symbol }); setTarget(null); }}
+          onCancel={() => setTarget(null)}
+        />
+      )}
     </Panel>
   );
 }

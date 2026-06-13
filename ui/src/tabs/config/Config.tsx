@@ -28,7 +28,9 @@ export function Config() {
     dispatch({ type: "UPDATE_CONFIG", patch: { universe: defaultUniverse, squeeze: defaultSqueeze, breakers: defaultBreakers } });
 
   return (
-    <div className="p-[10px] grid grid-cols-3 gap-[10px] items-start">
+    <div className="p-[10px]">
+    <div className="text-[10px] text-muted2 mb-[10px]">Edits apply live to the cockpit guard logic and auto-save to this browser.</div>
+    <div className="grid grid-cols-3 gap-[10px] items-start">
       <Panel label="UNIVERSE (§8)">
         <div className="p-3 text-[11px]">
           <NumField label="Market cap min ($M)" value={universe.capMinM} onChange={(n) => u({ capMinM: n })} />
@@ -69,6 +71,7 @@ export function Config() {
           </button>
         </div>
       </Panel>
+    </div>
     </div>
   );
 }

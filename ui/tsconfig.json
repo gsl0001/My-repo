@@ -13,6 +13,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/app-build/tsconfig.tsbuildinfo",
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["src", "vitest.setup.ts"],

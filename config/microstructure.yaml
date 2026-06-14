@@ -1,0 +1,14 @@
+# Level 2 microstructure thresholds. All starting hypotheses — tune via the sim harness.
+imbalance_depth: 5
+enter_imbalance: 0.35
+absorb_window_s: 5.0
+absorb_min_volume: 5000
+collapse_frac: 0.5
+collapse_min_levels: 2
+tape_window_s: 5.0
+sweep_levels: 3
+block_size: 5000
+exhaustion_drop: 0.5
+spoof_window_s: 5.0
+veto_spoof: 0.5
+min_conviction: 0.6

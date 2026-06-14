@@ -336,3 +336,63 @@ fail-closed, circuit-breaker trips, audit append-only, secrets fail-loud, and th
 *Built as a simulation and engineering exercise. Trading low-cap equities — especially shorting —
 carries substantial, potentially unlimited risk. Validate everything against a backtest and paper
 trading before risking any capital. Not financial advice.*
+
+
+
+
+
+
+
+
+
+
+
+trading logics
+Trading decisions happen in two places: **whether to enter a short**, and **whether to exit one**. Here's exactly how each is made.
+
+## Entering a short
+
+**Step 1 — Read the order book + tape into 5 signals.** Every tick, the engine computes:
+- **Imbalance** — is there more size resting on the offer (ask) than the bid? A number from −1 to +1. Negative = sell pressure (bearish, good for a short).
+- **Absorption** — is heavy buying repeatedly hitting the ask, but the ask keeps refreshing and price won't go higher? That's a hidden seller soaking up demand — the classic "top." 
+- **Tape sweep / exhaustion** — did buying sweep across several prices and then *die out*? Climactic exhaustion.
+- **Bid collapse** — is support on the bid side vanishing?
+- **Spoofing score** — how much of the displayed size is fake (added then yanked without trading)?
+
+**Step 2 — Each strategy casts a vote (with a strength 0–1):**
+- Imbalance strategy votes "enter" if imbalance ≤ **−0.35**, strength = how lopsided it is.
+- Absorption strategy votes "enter" if a hidden seller is present, strength = how strong.
+- Tape strategy votes "enter" if there's exhaustion *after* a sweep (strength 0.7).
+
+**Step 3 — Combine the votes into one decision:**
+1. **Spoof veto first.** If the book is too fake (spoof score ≥ **0.5**), conviction is zeroed → **no entry**, no matter what else. It won't be fooled by fake walls.
+2. **Add up conviction.** `score = sum of the enter-vote strengths × (0 if spoofy else 1)`.
+3. **Threshold.** Enter only if `score ≥ 0.6`.
+
+What that means in practice:
+- **Strong absorption alone** (strength ~0.8) → clears 0.6 → **enters**. (A hidden seller is high-conviction by itself.)
+- **A mild imbalance alone** (~0.4) → below 0.6 → **waits.** It needs a *second* confirmation, e.g. imbalance + tape exhaustion.
+- **Spoofy book** → vetoed regardless.
+
+This is deliberately the design philosophy: the cost of skipping a good trade is small; the cost of one squeeze is account-ending — so it errs toward *don't*.
+
+## The gates after the signal (a "yes" can still be killed)
+A confirmed entry signal is not an order yet. It must pass, in order:
+1. **Halted?** If a circuit breaker or kill switch is engaged → rejected.
+2. **Locate (Reg SHO)** — can you actually borrow the shares? No confirmed locate → **rejected, always**. (Fails closed.)
+3. **Sizing** — the share count is the *minimum* of: volatility sizing, % of average volume, a hard dollar cap, and the shares you located. If that comes out to zero → rejected.
+4. **Order** — placed as a marketable limit with a **protective stop attached automatically**.
+
+So the L2 read decides *timing/conviction*; the gates decide *whether it's allowed and how big*. L2 is a confirmation layer, never a way around the risk rules.
+
+## Exiting a position
+An open short is closed when **any one** of these fires (whichever comes first):
+- **Stop hit** — price reaches the stop (auto-cover).
+- **Squeeze guard** — the stock runs against you past thresholds: intraday gain > 100%, RVOL > 10×, borrow fee > 300%, or **≥ 15% adverse** from entry → force-exit.
+- **Tape exit** — a fresh up-sweep on the tape while you're short (the engine treats renewed aggressive buying as a squeeze starting).
+- **Time stop** — flat by the close (it's an intraday system).
+- **Borrow recall** — if the locate is lost mid-trade.
+
+Exits always **dominate** entries — if you're in a position and an exit condition shows up, it exits, no debate.
+
+Net: **enter only on confirmed, non-spoofed order-book exhaustion that's borrowable and within risk caps; exit fast on any sign it's going wrong.** Want me to show a concrete worked example end-to-end (one symbol, tick by tick), or go deeper on the sizing math or the squeeze guard?
